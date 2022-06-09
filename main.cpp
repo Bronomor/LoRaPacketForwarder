@@ -2,6 +2,9 @@
         #define LINUX
 #endif
 
+#include <iostream>
+#include <fstream>
+
 #include <cstdio>
 #include <ctime>
 #include <csignal>
@@ -187,6 +190,10 @@ int main(int argc, char **argv) {
   time_t currTime{std::time(nullptr)};
   char asciiTime[25];
 
+  // open file to track stats
+  std::ofstream outfile ("packetsStats.json", std::ofstream::out | std::ofstream::trunc);
+  //
+
   ts_asciitime(currTime, asciiTime, sizeof(asciiTime));
   printf("(%s) Started %s...\n", asciiTime, argv[0]);
 
@@ -211,7 +218,7 @@ int main(int argc, char **argv) {
   PrintConfiguration(cfg);
 
   SPISettings spiSettings{cfg.lora_chip_settings.spi_speed_hz, MSBFIRST,
-    SPI_MODE0, cfg.lora_chip_settings.spi_channel, cfg.lora_chip_settings.spi_port};
+    SPI_MODE0, cfg.lora_chip_settings.spi_channel};
   SPI.beginTransaction(spiSettings);
 
   PhysicalLayer* lora = instantiateLoRaChip(cfg.lora_chip_settings, SPI, spiSettings);
@@ -274,6 +281,14 @@ int main(int argc, char **argv) {
   while (keepRunning) {
     ++hearthbeat;
     currTime = std::time(nullptr);
+
+    // save amout of received and send packets to file
+    if(outfile.is_open() == true){
+      outfile.seekp(0);
+      outfile << "{" << "\"PACKET_RX\":\"" << loraPacketStats.recv_packets
+              << "\",\n\"PACKET_TX\":\"" << loraPacketStats.downlink_recv_packets << "\"\n}";
+    }
+    //
 
     if (keepRunning && currTime >= nextStatUpdateTime) {
       nextStatUpdateTime = currTime + sendStatPktIntervalSeconds;
@@ -338,6 +353,12 @@ int main(int argc, char **argv) {
 
   currTime = std::time(nullptr);
   ts_asciitime(currTime, asciiTime, sizeof(asciiTime));
+
+  // close file
+  if(outfile.is_open() == true){
+    outfile.close();
+  }
+  //
 
   printf("\n(%s) Shutting down...\n", asciiTime);
   fflush(stdout);
